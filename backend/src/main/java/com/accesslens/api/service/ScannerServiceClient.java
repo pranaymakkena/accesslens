@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import com.accesslens.api.model.ScanResult;
@@ -18,6 +19,9 @@ public class ScannerServiceClient {
     private final WebClient webClient;
     private final String scannerUrl;
     private final ObjectMapper objectMapper;
+    
+    // 10MB buffer limit instead of default 256KB
+    private static final int MAX_BUFFER_SIZE = 10 * 1024 * 1024;
 
     public ScannerServiceClient(
         WebClient.Builder webClientBuilder,
@@ -25,7 +29,15 @@ public class ScannerServiceClient {
         ObjectMapper objectMapper
     ) {
         this.scannerUrl = scannerUrl;
-        this.webClient = webClientBuilder.build();
+        
+        // Configure ExchangeStrategies with larger buffer
+        ExchangeStrategies strategies = ExchangeStrategies.builder()
+            .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(MAX_BUFFER_SIZE))
+            .build();
+        
+        this.webClient = webClientBuilder
+            .exchangeStrategies(strategies)
+            .build();
         this.objectMapper = objectMapper;
     }
 

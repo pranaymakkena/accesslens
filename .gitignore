@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+package-lock.json
+pom.lock
+
+# Build outputs
+dist/
+build/
+.angular/
+backend/target/
+scanner/dist/
+
+# Compiled files
+*.jar
+*.class
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# Tests
+coverage/
+.nyc_output/
+
+# Playwright
+.playwright/
+
+# Temporary
+tmp/
+temp/
+
+# Sensitive data
+credentials.json
+secrets.json
+*.pem
+*.key

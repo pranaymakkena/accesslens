@@ -1,5 +1,6 @@
 package com.accesslens.api.controller;
 
+import com.accesslens.api.graph.GraphAnalysisService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -26,10 +27,13 @@ public class ScanController {
 
     private final ScanService scanService;
     private final FixSuggestionService fixSuggestionService;
+    private final GraphAnalysisService graphAnalysisService;
 
-    public ScanController(ScanService scanService, FixSuggestionService fixSuggestionService) {
+    public ScanController(ScanService scanService, FixSuggestionService fixSuggestionService,
+                          GraphAnalysisService graphAnalysisService) {
         this.scanService = scanService;
         this.fixSuggestionService = fixSuggestionService;
+        this.graphAnalysisService = graphAnalysisService;
     }
 
     @PostMapping("/scans")
@@ -124,6 +128,170 @@ public class ScanController {
     @GetMapping("/health")
     public ResponseEntity<?> health() {
         return ResponseEntity.ok().body("{\"status\":\"UP\"}");
+    }
+
+    // ── Neo4j Graph Endpoints ─────────────────────────────────────────────
+
+    /**
+     * Returns flat graph data (nodes + edges) for Cytoscape.js visualisation.
+     * Each node has: nodeId, tag, selector, severity, ariaHidden, focusBlocked,
+     * inShadowDom, violationRules.
+     * Each edge is derived from the childIds list on each node.
+     */
+    @GetMapping("/scans/{id}/graph")
+    public ResponseEntity<?> getDomGraph(@PathVariable String id) {
+        ScanResult result = scanService.getScanResult(id);
+        if (result == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse(404, "Not found", "Scan not found"));
+        }
+        try {
+            java.util.List<java.util.Map<String, Object>> nodes = graphAnalysisService.getGraphData(id);
+            // Convert to Cytoscape.js element format
+            java.util.List<java.util.Map<String, Object>> elements = toCytoscapeElements(nodes);
+            return ResponseEntity.ok(java.util.Map.of("elements", elements, "nodeCount", nodes.size()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ErrorResponse(503, "Graph unavailable",
+                    "Neo4j graph data not yet available — scan may still be processing."));
+        }
+    }
+
+    /**
+     * Cascading Impact Analysis: returns "root cause components" — ancestor
+     * elements whose subtree contains the most violations.
+     */
+    @GetMapping("/scans/{id}/graph/root-causes")
+    public ResponseEntity<?> getRootCauses(@PathVariable String id) {
+        ScanResult result = scanService.getScanResult(id);
+        if (result == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse(404, "Not found", "Scan not found"));
+        }
+        try {
+            return ResponseEntity.ok(graphAnalysisService.getRootCauseComponents(id));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ErrorResponse(503, "Graph unavailable", "Neo4j graph not yet available."));
+        }
+    }
+
+    /**
+     * Returns elements that are invisible to assistive technology because they
+     * sit inside an aria-hidden ancestor (the "aria-hidden cascade" problem).
+     */
+    @GetMapping("/scans/{id}/graph/aria-hidden-cascades")
+    public ResponseEntity<?> getAriaHiddenCascades(@PathVariable String id) {
+        ScanResult result = scanService.getScanResult(id);
+        if (result == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse(404, "Not found", "Scan not found"));
+        }
+        try {
+            return ResponseEntity.ok(graphAnalysisService.getAriaHiddenCascades(id));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ErrorResponse(503, "Graph unavailable", "Neo4j graph not yet available."));
+        }
+    }
+
+    /**
+     * Graph-based WCAG roadmap: returns violated WCAG criteria ranked by
+     * severity, connected to the live violation graph.
+     */
+    @GetMapping("/scans/{id}/graph/wcag-roadmap")
+    public ResponseEntity<?> getWcagGraphRoadmap(@PathVariable String id) {
+        ScanResult result = scanService.getScanResult(id);
+        if (result == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse(404, "Not found", "Scan not found"));
+        }
+        try {
+            return ResponseEntity.ok(graphAnalysisService.getWcagRoadmap(id));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ErrorResponse(503, "Graph unavailable", "Neo4j graph not yet available."));
+        }
+    }
+
+    // ── Helper: convert flat Neo4j rows to Cytoscape.js elements ──────────
+
+    @SuppressWarnings("unchecked")
+    private java.util.List<java.util.Map<String, Object>> toCytoscapeElements(
+            java.util.List<java.util.Map<String, Object>> rows) {
+        java.util.List<java.util.Map<String, Object>> elements = new java.util.ArrayList<>();
+        for (java.util.Map<String, Object> row : rows) {
+            String nodeId = String.valueOf(row.get("nodeId"));
+            // Node element
+            java.util.Map<String, Object> data = new java.util.LinkedHashMap<>();
+            data.put("id", nodeId);
+            data.put("tag", row.get("tag"));
+            data.put("selector", row.get("selector"));
+            data.put("severity", row.getOrDefault("severity", "none"));
+            data.put("ariaHidden", row.getOrDefault("ariaHidden", false));
+            data.put("focusBlocked", row.getOrDefault("focusBlocked", false));
+            data.put("inShadowDom", row.getOrDefault("inShadowDom", false));
+            data.put("violationRules", row.getOrDefault("violationRules", java.util.List.of()));
+            data.put("label", row.getOrDefault("tag", "?") + (row.get("selector") != null
+                ? "\n" + abbreviate(String.valueOf(row.get("selector")), 30) : ""));
+            elements.add(java.util.Map.of("data", data));
+
+            // Edge elements
+            Object childIds = row.get("childIds");
+            if (childIds instanceof java.util.List) {
+                for (Object childId : (java.util.List<?>) childIds) {
+                    if (childId == null || String.valueOf(childId).isBlank()) continue;
+                    java.util.Map<String, Object> edge = new java.util.LinkedHashMap<>();
+                    edge.put("id", "e_" + nodeId + "_" + childId);
+                    edge.put("source", nodeId);
+                    edge.put("target", String.valueOf(childId));
+                    edge.put("label", "CONTAINS");
+                    elements.add(java.util.Map.of("data", edge));
+                }
+            }
+        }
+        return elements;
+    }
+
+    private String abbreviate(String s, int max) {
+        return s.length() <= max ? s : "…" + s.substring(s.length() - max + 1);
+    }
+
+    @GetMapping("/scans/{id}/score")
+    public ResponseEntity<?> getScore(@PathVariable String id) {
+        ScanResult result = scanService.getScanResult(id);
+        if (result == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse(404, "Not found", "Scan not found"));
+        }
+        int critical = 0, serious = 0, moderate = 0, minor = 0;
+        int penalty = 0;
+        if (result.getViolations() != null) {
+            for (com.accesslens.api.model.Violation v : result.getViolations()) {
+                String impact = v.getImpact() != null ? v.getImpact() : "minor";
+                int nodes = v.getNodeCount() > 0 ? v.getNodeCount() : 1;
+                int w;
+                switch (impact) {
+                    case "critical": w = 25; critical++; break;
+                    case "serious":  w = 10; serious++;  break;
+                    case "moderate": w =  5; moderate++; break;
+                    default:         w =  2; minor++;    break;
+                }
+                penalty += w * Math.min(nodes, 10);
+            }
+        }
+        int score = Math.max(0, Math.min(100, 100 - penalty));
+        String grade = score >= 90 ? "A" : score >= 75 ? "B" : score >= 60 ? "C" : score >= 40 ? "D" : "F";
+        java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("score", score);
+        body.put("grade", grade);
+        body.put("critical", critical);
+        body.put("serious", serious);
+        body.put("moderate", moderate);
+        body.put("minor", minor);
+        body.put("totalViolations", result.getViolationCount());
+        body.put("totalPassed", result.getPassCount());
+        return ResponseEntity.ok(body);
     }
 
     private String generateHtmlReport(ScanResult result) {

@@ -1,12 +1,12 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { ScanService } from '../../services/scan.service';
 
 @Component({
   selector: 'app-landing',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   template: `
     <div class="landing">
       <!-- Hero -->
@@ -96,6 +96,22 @@ import { ScanService } from '../../services/scan.service';
               <div class="step-num" aria-hidden="true">{{ i + 1 }}</div>
               <h3>{{ step.title }}</h3>
               <p>{{ step.desc }}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- New Features Section -->
+      <section class="features-section" aria-labelledby="features-heading">
+        <div class="container">
+          <h2 id="features-heading" class="section-title">Everything you need to make your site accessible</h2>
+          <p class="section-sub">AccessLens goes beyond basic violation listing — it's a complete accessibility toolkit</p>
+          <div class="features-grid">
+            <div class="feature-card card" *ngFor="let f of features">
+              <span class="feature-icon" aria-hidden="true">{{ f.icon }}</span>
+              <h3>{{ f.title }}</h3>
+              <p>{{ f.desc }}</p>
+              <a *ngIf="f.link" [routerLink]="f.link" class="feature-link">Try it →</a>
             </div>
           </div>
         </div>
@@ -247,6 +263,21 @@ import { ScanService } from '../../services/scan.service';
     .step h3 { font-size: 1rem; margin-bottom: 0.5rem; }
     .step p { font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6; }
 
+    /* Features section */
+    .features-section { padding: 4rem 0; background: white; border-top: 1px solid var(--border); }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+      gap: 1.25rem;
+    }
+    .feature-card { padding: 1.5rem; transition: box-shadow 0.15s, transform 0.15s; }
+    .feature-card:hover { box-shadow: var(--shadow); transform: translateY(-2px); }
+    .feature-icon { font-size: 1.75rem; display: block; margin-bottom: 0.875rem; }
+    .feature-card h3 { font-size: 1rem; margin-bottom: 0.5rem; }
+    .feature-card p { font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 0.75rem; }
+    .feature-link { font-size: 0.875rem; color: var(--primary); font-weight: 600; text-decoration: none; }
+    .feature-link:hover { text-decoration: underline; }
+
     .sr-only {
       position: absolute;
       width: 1px;
@@ -282,6 +313,18 @@ export class LandingComponent {
     { icon: '📋', title: 'Invalid ARIA attributes', desc: 'Incorrect ARIA usage can make interactive elements inaccessible.' },
     { icon: '📄', title: 'Missing page title', desc: 'Every page needs a meaningful title for navigation and identification.' },
     { icon: '🔤', title: 'Heading structure issues', desc: 'Skipping heading levels breaks navigation for screen reader users.' }
+  ];
+
+  features = [
+    { icon: '🏆', title: 'Accessibility Score', desc: 'Get a 0–100 score and letter grade (A–F) weighted by severity and affected element count — not just a raw violation count.', link: null },
+    { icon: '📊', title: 'WCAG Principle Breakdown', desc: 'See pass/fail rates across all four WCAG principles: Perceivable, Operable, Understandable, and Robust.', link: null },
+    { icon: '🗺️', title: 'Smart Fix Roadmap', desc: 'AI-ranked top 5 fixes sorted by impact-to-effort ratio. Fix the right things first for maximum accessibility gain.', link: null },
+    { icon: '📈', title: 'Scan History & Trends', desc: 'Every scan is saved locally. Track your score improvements over time with sparkline trend charts.', link: '/history' },
+    { icon: '🎨', title: 'Color Contrast Checker', desc: 'Interactive tool to test any color pair against WCAG AA/AAA requirements, with accessible color suggestions.', link: '/contrast' },
+    { icon: '📋', title: 'One-Click Fix Copy', desc: 'Copy the suggested "after" code snippet to your clipboard instantly from within each issue detail panel.', link: null },
+    { icon: '🔗', title: 'Shareable Report Links', desc: 'Copy a direct link to any scan result and share it with your team in one click.', link: null },
+    { icon: '💾', title: 'Multi-Format Export', desc: 'Download results as an HTML report, CSV spreadsheet, or raw JSON for integration with your workflow.', link: null },
+    { icon: '📚', title: '25+ Fix Templates', desc: 'Detailed before/after code fixes, WCAG references, and step-by-step remediation for 25+ of the most common rules.', link: null },
   ];
 
   steps = [

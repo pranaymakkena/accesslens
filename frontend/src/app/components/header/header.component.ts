@@ -15,6 +15,8 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
           <ul class="nav-links" role="list">
             <li><a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}">Scanner</a></li>
             <li><a routerLink="/demo" routerLinkActive="active">Demo</a></li>
+            <li><a routerLink="/contrast" routerLinkActive="active">Contrast</a></li>
+            <li><a routerLink="/history" routerLinkActive="active">History</a></li>
             <li>
               <a href="https://github.com/pranaymakkena/accesslens"
                  target="_blank" rel="noopener noreferrer"

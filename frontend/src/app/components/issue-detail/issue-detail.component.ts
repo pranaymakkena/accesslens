@@ -61,11 +61,23 @@ import { SeverityBadgeComponent } from '../severity-badge/severity-badge.compone
             </div>
             <div class="code-comparison">
               <div class="code-panel">
-                <div class="code-label code-label-before">Before (problematic)</div>
+                <div class="code-panel-header">
+                  <div class="code-label code-label-before">Before (problematic)</div>
+                  <button class="copy-btn" (click)="copyCode(fix!.before, 'before')" type="button"
+                          [attr.aria-label]="copiedBefore ? 'Copied!' : 'Copy before code'">
+                    {{ copiedBefore ? '✅' : '📋' }}
+                  </button>
+                </div>
                 <pre class="code-block">{{ fix.before }}</pre>
               </div>
               <div class="code-panel">
-                <div class="code-label code-label-after">After (suggested)</div>
+                <div class="code-panel-header">
+                  <div class="code-label code-label-after">After (suggested)</div>
+                  <button class="copy-btn" (click)="copyCode(fix!.after, 'after')" type="button"
+                          [attr.aria-label]="copiedAfter ? 'Copied!' : 'Copy fix code'">
+                    {{ copiedAfter ? '✅' : '📋' }}
+                  </button>
+                </div>
                 <pre class="code-block">{{ fix.after }}</pre>
               </div>
             </div>
@@ -206,14 +218,17 @@ import { SeverityBadgeComponent } from '../severity-badge/severity-badge.compone
     }
     .fix-disclaimer { margin-bottom: 1rem; font-size: 0.875rem; }
     .code-comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .code-panel-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:-4px; }
     .code-label {
       font-size: 0.75rem;
       font-weight: 600;
       padding: 0.25rem 0.5rem;
       border-radius: 4px 4px 0 0;
       display: inline-block;
-      margin-bottom: -4px;
     }
+    .copy-btn { background:none; border:none; cursor:pointer; font-size:0.9rem; padding:0.2rem 0.4rem;
+      border-radius:4px; color:var(--text-muted); transition:color 0.15s; }
+    .copy-btn:hover { color:var(--primary); }
     .code-label-before { background: #fef2f2; color: var(--danger); }
     .code-label-after  { background: #f0fdf4; color: var(--success); }
     .code-block { white-space: pre-wrap; word-break: break-all; border-radius: 0 var(--radius) var(--radius) var(--radius); }
@@ -233,6 +248,8 @@ export class IssueDetailComponent implements OnChanges {
   fix: FixSuggestion | null = null;
   loadingFix = false;
   fixError = false;
+  copiedBefore = false;
+  copiedAfter = false;
 
   constructor(private scanService: ScanService) {}
 
@@ -241,6 +258,8 @@ export class IssueDetailComponent implements OnChanges {
       this.fix = null;
       this.fixError = false;
       this.loadingFix = true;
+      this.copiedBefore = false;
+      this.copiedAfter = false;
       this.scanService.getFixSuggestion(this.violation.id).subscribe({
         next: fix => { this.fix = fix; this.loadingFix = false; },
         error: () => { this.fixError = true; this.loadingFix = false; }
@@ -252,5 +271,12 @@ export class IssueDetailComponent implements OnChanges {
     if ((event.target as HTMLElement).classList.contains('detail-overlay')) {
       this.close.emit();
     }
+  }
+
+  copyCode(code: string, which: 'before' | 'after'): void {
+    this.scanService.copyToClipboard(code).then(() => {
+      if (which === 'before') { this.copiedBefore = true; setTimeout(() => (this.copiedBefore = false), 2000); }
+      else { this.copiedAfter = true; setTimeout(() => (this.copiedAfter = false), 2000); }
+    });
   }
 }

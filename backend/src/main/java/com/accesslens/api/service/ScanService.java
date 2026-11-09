@@ -1,5 +1,6 @@
 package com.accesslens.api.service;
 
+import com.accesslens.api.graph.GraphAnalysisService;
 import com.accesslens.api.model.ScanResult;
 import com.accesslens.api.model.ScanStatus;
 import org.slf4j.Logger;
@@ -17,10 +18,13 @@ public class ScanService {
 
     private final ScannerServiceClient scannerClient;
     private final ScanStore scanStore;
+    private final GraphAnalysisService graphAnalysisService;
 
-    public ScanService(ScannerServiceClient scannerClient, ScanStore scanStore) {
+    public ScanService(ScannerServiceClient scannerClient, ScanStore scanStore,
+                       GraphAnalysisService graphAnalysisService) {
         this.scannerClient = scannerClient;
         this.scanStore = scanStore;
+        this.graphAnalysisService = graphAnalysisService;
     }
 
     public String startScan(String url) {
@@ -29,7 +33,6 @@ public class ScanService {
         result.setStatus(ScanStatus.PENDING);
         scanStore.store(result);
 
-        // Run scan asynchronously
         CompletableFuture.runAsync(() -> performScan(scanId, url));
 
         logger.info("Scan {} initiated for URL: {}", scanId, url);
@@ -44,9 +47,8 @@ public class ScanService {
             result.setStatus(ScanStatus.SCANNING);
             scanStore.store(result);
 
-            // Call scanner service
             Mono<ScanResult> scanMono = scannerClient.scan(url);
-            ScanResult scanResult = scanMono.block(); // Block to complete async call
+            ScanResult scanResult = scanMono.block();
 
             if (scanResult != null) {
                 scanResult.setId(scanId);
@@ -55,6 +57,15 @@ public class ScanService {
                 scanResult.setStatus(ScanStatus.COMPLETE);
                 scanStore.store(scanResult);
                 logger.info("Scan {} completed with {} violations", scanId, scanResult.getViolationCount());
+
+                // Build Neo4j graph asynchronously (non-blocking for the poll response)
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        graphAnalysisService.buildGraphForScan(scanResult);
+                    } catch (Exception e) {
+                        logger.warn("Neo4j graph build failed for scan {} (non-fatal): {}", scanId, e.getMessage());
+                    }
+                });
             } else {
                 result.setStatus(ScanStatus.FAILED);
                 result.setError("Scanner returned no result");
